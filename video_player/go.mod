@@ -5,4 +5,6 @@ go 1.13
 require (
 	github.com/3d0c/gmf v0.0.0-20190724130615-f4b5acb7db5c
 	github.com/go-flutter-desktop/go-flutter v0.35.1
+	go.uber.org/goleak v1.0.0
+	gocv.io/x/gocv v0.22.0
 )

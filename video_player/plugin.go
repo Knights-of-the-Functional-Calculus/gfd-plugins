@@ -3,6 +3,8 @@ package video_player
 import (
 	"errors"
 	"fmt"
+	// "gocv.io/x/gocv"
+	// "runtime"
 	"time"
 
 	flutter "github.com/go-flutter-desktop/go-flutter"
@@ -28,6 +30,8 @@ func (p *VideoPlayerPlugin) InitPlugin(messenger plugin.BinaryMessenger) error {
 	p.videoPlayers = make(map[int32]*player)
 	channel := plugin.NewMethodChannel(messenger, channelName, plugin.StandardMethodCodec{})
 	channel.HandleFunc("init", func(_ interface{}) (interface{}, error) { return nil, nil })
+	channel.HandleFunc("setVolume", func(_ interface{}) (interface{}, error) { return nil, nil })
+	channel.HandleFunc("setLooping", func(_ interface{}) (interface{}, error) { return nil, nil })
 	channel.HandleFunc("create", p.create)
 	channel.HandleFunc("play", p.play)
 	channel.HandleFunc("pause", p.pause)
@@ -55,13 +59,19 @@ func (p *VideoPlayerPlugin) InitPluginTexture(registry *flutter.TextureRegistry)
 func (p *VideoPlayerPlugin) create(arguments interface{}) (reply interface{}, err error) {
 	args := arguments.(map[interface{}]interface{})
 
-	if _, ok := args["asset"]; ok {
-		return nil, errors.New("only online video and relative path videos are supported")
+	asset, ok := args["asset"]
+	if !ok {
+		asset, ok = args["uri"]
 	}
+
+	if !ok {
+		return nil, errors.New("Asset and URI path not found")
+	}
+
 	texture := p.textureRegistry.NewTexture()
 
 	player := &player{
-		uri:     args["uri"].(string),
+		uri:     asset.(string),
 		texture: texture,
 	}
 
@@ -84,7 +94,11 @@ func (p *VideoPlayerPlugin) play(arguments interface{}) (reply interface{}, err 
 
 func (p *VideoPlayerPlugin) dispose(arguments interface{}) (reply interface{}, err error) {
 	args := arguments.(map[interface{}]interface{})
-	p.videoPlayers[args["textureId"].(int32)].dispose()
+	textureId := args["textureId"].(int32)
+	p.videoPlayers[textureId].dispose()
+	delete(p.videoPlayers, textureId)
+	p.messenger.SetChannelHandler(fmt.Sprintf("flutter.io/videoPlayer/videoEvents%d", textureId), nil)
+
 	return nil, nil
 }
 
@@ -126,6 +140,7 @@ func (p *player) OnListen(arguments interface{}, sink *plugin.EventSink) { // fl
 	bufferSize := 10 // in frames
 
 	err := p.videoBuffer.Init(p.uri, bufferSize)
+
 	if err != nil {
 		sink.Error("VideoError", fmt.Sprintf("Video player had error: %v", err), nil)
 	}
@@ -145,9 +160,9 @@ func (p *player) dispose() {
 	p.videoBuffer.Cancel()
 	p.texture.UnRegister()
 	for len(p.videoBuffer.Frames) > 0 {
-		pixels := <-p.videoBuffer.Frames // get the frame, ! Block the main thread !
-		pixels.Free()
+		<-p.videoBuffer.Frames // get the frame, ! Block the main thread !
 	}
+	fmt.Printf("%v\n", p.videoBuffer)
 }
 
 func (p *player) play() {
@@ -160,9 +175,9 @@ func (p *player) play() {
 	consumer := func() {
 		imagePerSec := p.videoBuffer.GetFrameRate()
 
-		for p.videoBuffer.HasFrameAvailable() {
+		for !p.videoBuffer.Stopped() {
 			p.videoBuffer.WaitUnPause()
-			time.Sleep(time.Duration(imagePerSec*1000) * time.Millisecond)
+			time.Sleep(time.Duration(imagePerSec) * time.Millisecond)
 			p.videoBuffer.WaitUnPause()
 			p.newFrame <- true
 			p.texture.FrameAvailable() // trigger p.textureHanler (display new frame)
@@ -173,13 +188,12 @@ func (p *player) play() {
 	go func() {
 		p.videoBuffer.Stream(consumer)
 		close(p.newFrame)
-		p.videoBuffer.Free()
 	}()
 
 }
 
 func (p *player) textureHanler(width, height int) (bool, *flutter.PixelBuffer) {
-	if p.videoBuffer.Closed() {
+	if p.videoBuffer.Stopped() {
 		return false, nil
 	}
 
@@ -194,7 +208,6 @@ func (p *player) textureHanler(width, height int) (bool, *flutter.PixelBuffer) {
 	vWidth, vHeight := p.videoBuffer.Bounds()
 	pixels := <-p.videoBuffer.Frames // get the frame, ! Block the main thread !
 	p.currentTime = pixels.Time()
-	defer pixels.Free()
 	return true, &flutter.PixelBuffer{ // send the image to the scene
 		Pix:    pixels.Data(),
 		Width:  vWidth,

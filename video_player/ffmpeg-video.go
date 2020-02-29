@@ -1,5 +1,6 @@
 package video_player
 
+/*
 // This file hides the ffmpeg related computations.
 //
 // The api exposed by github.com/3d0c/gmf is messy (all go-ffmpeg lib are)
@@ -280,3 +281,4 @@ func (f *ffmpegVideo) WaitUnPause() {
 		<-f.paused
 	}
 }
+*/
