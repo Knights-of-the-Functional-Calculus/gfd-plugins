@@ -1,6 +1,7 @@
 package video_player
 
 import (
+	// "bytes"
 	"errors"
 	"fmt"
 	// "gocv.io/x/gocv"
@@ -98,6 +99,7 @@ func (p *VideoPlayerPlugin) dispose(arguments interface{}) (reply interface{}, e
 	p.videoPlayers[textureId].dispose()
 	delete(p.videoPlayers, textureId)
 	p.messenger.SetChannelHandler(fmt.Sprintf("flutter.io/videoPlayer/videoEvents%d", textureId), nil)
+	// runtime.GC()
 
 	return nil, nil
 }
@@ -110,10 +112,10 @@ func (p *VideoPlayerPlugin) pause(arguments interface{}) (reply interface{}, err
 }
 
 func (p *VideoPlayerPlugin) position(arguments interface{}) (reply interface{}, err error) {
-	args := arguments.(map[interface{}]interface{})
-	videoPlayer := p.videoPlayers[args["textureId"].(int32)]
+	// args := arguments.(map[interface{}]interface{})
+	// videoPlayer := p.videoPlayers[args["textureId"].(int32)]
 
-	return int64(videoPlayer.currentTime * 1000), nil
+	return int64(1 * 1000), nil
 }
 
 // player correspond to one instance of a player with his associated texture
@@ -162,7 +164,6 @@ func (p *player) dispose() {
 	for len(p.videoBuffer.Frames) > 0 {
 		<-p.videoBuffer.Frames // get the frame, ! Block the main thread !
 	}
-	fmt.Printf("%v\n", p.videoBuffer)
 }
 
 func (p *player) play() {
@@ -187,9 +188,11 @@ func (p *player) play() {
 	// on the pending frames, consume image in the channel
 	go func() {
 		p.videoBuffer.Stream(consumer)
-		close(p.newFrame)
+		// close(p.newFrame)
+		// var b bytes.Buffer
+		// gocv.MatProfile.WriteTo(&b, 1)
+		// fmt.Print(b.String())
 	}()
-
 }
 
 func (p *player) textureHanler(width, height int) (bool, *flutter.PixelBuffer) {

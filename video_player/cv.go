@@ -20,15 +20,14 @@ import (
 type ffmpegVideo struct {
 	// img            gocv.Mat
 	// rgba           gocv.Mat
-	source         string
-	duration       float64
-	fps            float64
-	Frames         chan *ffmpegFrame
-	firstFrameDone chan bool
-	paused         chan bool
-	player         *playerStatus
-	width          int
-	height         int
+	source   string
+	duration float64
+	fps      float64
+	Frames   chan *ffmpegFrame
+	paused   chan bool
+	player   *playerStatus
+	width    int
+	height   int
 }
 
 type ffmpegFrame struct {
@@ -77,9 +76,9 @@ func (f *ffmpegVideo) Init(srcFileName string, bufferSize int) (err error) {
 	f.Frames = make(chan *ffmpegFrame, bufferSize)
 
 	f.source = srcFileName
-	webcam, err := gocv.OpenVideoCapture(srcFileName)
+	// webcam, err := gocv.OpenVideoCapture(srcFileName)
+	webcam, err := gocv.OpenVideoCapture(0)
 	defer webcam.Close()
-	// f.webcam, err = gocv.OpenVideoCapture(0)
 	if err != nil {
 		fmt.Printf("Error opening video capture device: %v\n", srcFileName)
 		return
@@ -101,17 +100,11 @@ func (f *ffmpegVideo) Init(srcFileName string, bufferSize int) (err error) {
 }
 
 func (f *ffmpegVideo) Free() {
-	<-f.firstFrameDone
-	close(f.Frames)
-	close(f.firstFrameDone)
-	close(f.paused)
 	PrintMemUsage()
 }
 
 func (f *ffmpegVideo) Stream(onFirstFrame func()) {
-	// drain := -1
 	hasConsumer := false
-	f.firstFrameDone = make(chan bool)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -120,7 +113,8 @@ func (f *ffmpegVideo) Stream(onFirstFrame func()) {
 		}
 	}()
 
-	webcam, err := gocv.OpenVideoCapture(f.source)
+	webcam, err := gocv.OpenVideoCapture(0)
+	// webcam, err := gocv.OpenVideoCapture(f.source)
 	defer webcam.Close()
 	if err != nil {
 		fmt.Printf("Error opening video capture device: %v\n", f.source)
@@ -149,12 +143,10 @@ func (f *ffmpegVideo) Stream(onFirstFrame func()) {
 			f.play()
 			go func() {
 				onFirstFrame()
-				f.firstFrameDone <- true
 			}()
 			hasConsumer = true
 		}
 	}
-	f.Free()
 }
 
 func (f *ffmpegVideo) Bounds() (int, int) {
